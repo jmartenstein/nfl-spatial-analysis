@@ -12,7 +12,9 @@ def get_influence_radius(distance):
     # compute the influence radius, based on the distance from the player
     # to the ball
 
-    radius = np.minimum( (3 / (200 * (distance**2))) + 4, 10)
+    radius = np.minimum( ((3 / 180) * (distance**2)) + 4, 10)
+
+    return radius
 
 def get_covariance_matrix(direction, speed, distance_from_ball):
 
@@ -21,7 +23,7 @@ def get_covariance_matrix(direction, speed, distance_from_ball):
 
     # R = [ [ cos(theta), -sin(theta) ], [ sin(theta), cos(theta) ] ]
     th = np.radians(direction)
-    rotation = np.array( [[np.cos(th), -np.sin(th)]
+    rotation = np.array( [[np.cos(th), -np.sin(th)],
                           [np.sin(th), np.cos(th)]]
                        )
 
@@ -36,32 +38,37 @@ def get_covariance_matrix(direction, speed, distance_from_ball):
     # Appendix 1, Equation 17 and Equation 19
     # S = [ [scale_x, 0], [0, scale_y]]
     scale_x = (inf_radius + (inf_radius*speed_ratio) / 2)
-    scale_y = (inf_radius - (inf_radius*speed_ratio)) / 2)
-    scaling = np.array( [scale_x, 0], [0, scale_y]] )
+    scale_y = (inf_radius - (inf_radius*speed_ratio) / 2)
+    scaling = np.array( [[scale_x, 0], [0, scale_y]] )
 
     # multiply the rotation and scaling matrices, per equation 15 
 
     # COV = RSSR^-1
     covariance = rotation @ scaling @ scaling @ rotation.T
 
-def get_player_influence_func(position, direction, speed):
+    return covariance
 
-    cov = get_covariance_matrix(direction, speed)
+def get_player_influence_func(position, direction, speed, distance_from_ball):
 
-    speed_x = speed * np.cos(np.pi * (direction / 180))
-    speed_y = speed * np.sin(np.pi * (direction / 180))
+    cov = get_covariance_matrix(direction, speed, distance_from_ball)
+
+    radian_dir = np.pi * (direction / 180)
+    speed_x = speed * np.cos(radian_dir)
+    speed_y = speed * np.sin(radian_dir)
 
     # per Appendix 1, Equation 21 calculate the gaussian
-    # distribution mean as the X and Y position plus half
+    # distribution mean (mu) as the X and Y position plus half
     # of the current speed
 
-    # mu = position + speed * 0.5
+    # mean = position + speed * 0.5
 
     dist_mean = np.array([
         position[0] + (speed_x * 0.5),
         position[1] + (speed_y * 0.5)
     ])
 
-    distribution = st.multivariate_normal(dist_mean, cov)
+    dist = st.multivariate_normal(dist_mean, cov)
 
-    return distribution.pdf(position)
+    func = lambda p: dist.pdf(p) / dist.pdf(dist_mean)
+
+    return func
